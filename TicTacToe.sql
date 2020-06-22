@@ -79,6 +79,12 @@ BEGIN
 	IF 'hard' IN ( SELECT * FROM GENERAL_INFORMATION ) RETURN 1 RETURN 0
 END
 GO
+-- returns 1 if this is the hard mode
+CREATE FUNCTION IS_INVINCIBLE_MODE() RETURNS INT
+BEGIN
+	IF 'invincible' IN ( SELECT * FROM GENERAL_INFORMATION ) RETURN 1 RETURN 0
+END
+GO
 -- returns 1 if the position is already taken, 0 otherwise
 CREATE FUNCTION IS_OCCUPIED(
     @Horizontal int,
@@ -202,6 +208,11 @@ BEGIN
 	END
 END
 GO
+
+
+
+
+/* hard ai */
 -- returns a position
 CREATE PROCEDURE POSITION_HARD_AI
 	@OutHorizontal int OUTPUT,
@@ -290,6 +301,95 @@ GO
 
 
 
+/* invincible ai */
+-- returns a position
+CREATE PROCEDURE POSITION_INVINCIBLE_AI
+	@OutHorizontal int OUTPUT,
+	@OutVertical int OUTPUT
+AS
+BEGIN
+	CREATE TABLE #LocalTempBoard ( Num int )
+	INSERT INTO #LocalTempBoard VALUES (1),(2),(3)
+
+	-- find every free position of the board
+	DECLARE @EveryFreePosition AS BOARD_POSITION
+	INSERT INTO @EveryFreePosition
+		SELECT
+			H.Num AS Horizontal,
+			V.Num AS Vertical,
+			'O' AS Player
+		FROM #LocalTempBoard H CROSS JOIN #LocalTempBoard V
+		EXCEPT SELECT Horizontal, Vertical, 'O' FROM GAME_BOARD
+
+	-- cursor on free positions
+	DECLARE position_cursor SCROLL CURSOR
+	FOR SELECT Horizontal, Vertical FROM @EveryFreePosition
+	OPEN position_cursor
+	FETCH FIRST FROM position_cursor INTO @OutHorizontal, @OutVertical
+
+	-- 1. Take spot if going to win
+	WHILE @@FETCH_STATUS = 0
+	BEGIN
+		DECLARE @NewBoard AS BOARD_POSITION
+		INSERT INTO @NewBoard SELECT * FROM GAME_BOARD UNION SELECT @OutHorizontal, @OutVertical, 'O'
+
+		IF dbo.GET_WINNER(@NewBoard) = 'O' BEGIN
+			SET @OutHorizontal = @OutHorizontal
+			SET @OutVertical = @OutVertical
+			RETURN
+		END
+
+		DELETE FROM @NewBoard
+		FETCH NEXT FROM position_cursor INTO @OutHorizontal, @OutVertical
+	END
+
+	-- 2. Take spot if going to lose
+	FETCH FIRST FROM position_cursor INTO @OutHorizontal, @OutVertical -- reset the cursor
+	WHILE @@FETCH_STATUS = 0
+	BEGIN
+		INSERT INTO @NewBoard SELECT * FROM GAME_BOARD UNION SELECT @OutHorizontal, @OutVertical, 'X'
+
+		IF dbo.GET_WINNER(@NewBoard) = 'X' BEGIN
+			SET @OutHorizontal = @OutHorizontal
+			SET @OutVertical = @OutVertical
+			RETURN
+		END
+
+		DELETE FROM @NewBoard
+		FETCH NEXT FROM position_cursor INTO @OutHorizontal, @OutVertical
+	END
+
+	CLOSE position_cursor
+	DEALLOCATE position_cursor
+
+	-- 3. Take center
+	SET @OutHorizontal = 2
+	SET @OutVertical = 2
+	IF EXISTS (SELECT Horizontal, Vertical FROM @EveryFreePosition
+		WHERE Horizontal = 2 AND Vertical = 2)
+		RETURN
+
+	-- 4. Take corner
+	SELECT
+		@OutHorizontal = FIRST_VALUE(Horizontal) OVER (PARTITION BY Vertical ORDER BY Horizontal),
+		@OutVertical = FIRST_VALUE(Vertical) OVER (PARTITION BY Vertical ORDER BY Horizontal)
+	FROM @EveryFreePosition
+	WHERE Horizontal + Vertical IN (2, 4, 6)	-- (1,1), (1,3), (3,1), (3,3)
+	IF @OutHorizontal IS NOT NULL RETURN
+
+	-- 5. Take non-corner non-center
+	SELECT
+		@OutHorizontal = FIRST_VALUE(Horizontal) OVER (PARTITION BY Vertical ORDER BY Horizontal),
+		@OutVertical = FIRST_VALUE(Vertical) OVER (PARTITION BY Vertical ORDER BY Horizontal)
+	FROM @EveryFreePosition
+	WHERE Horizontal + Vertical IN (3, 5)	-- (1,2), (2,1), (3,2), (2,3)
+	IF @OutHorizontal IS NOT NULL RETURN
+END
+GO
+
+
+
+
 /* Procedures to display something */
 -- show the board to the user
 CREATE PROCEDURE ShowBoard
@@ -331,7 +431,7 @@ BEGIN
 	DECLARE @Mode varchar(20)
 	SET @Mode = (
 		SELECT Info FROM GENERAL_INFORMATION
-		WHERE Info IN ('free', 'easy', 'hard')
+		WHERE Info IN ('free', 'easy', 'hard', 'invincible')
 	)
 
 	IF @Mode IS NULL SET @Mode = 'free'
@@ -380,7 +480,7 @@ CREATE PROCEDURE ChangeMode(@Mode varchar(20))
 AS
 	TRUNCATE TABLE GENERAL_INFORMATION
 
-	IF @Mode NOT IN ('free', 'easy', 'hard') BEGIN
+	IF @Mode NOT IN ('free', 'easy', 'hard', 'invincible') BEGIN
 		PRINT N'Error : ' + @Mode + ', not implemented.'
 		RETURN
 	END
@@ -438,6 +538,8 @@ AS
 		INSERT INTO GAME_BOARD VALUES (@Horizontal, @Vertical, 'O')
 	END
 
+	--
+
 	-- check if the game is over
 	DELETE FROM @GameState
 	INSERT INTO @GameState SELECT * FROM GAME_BOARD
@@ -466,6 +568,7 @@ PRINT N'-- Example : EXEC Play @Horizontal = 1, @Vertical = 1;'
 PRINT N'-- Change mode : EXEC ChangeMode @Mode = ...;'
 PRINT N'-- -- -- easy (=> AI plays randomly)'
 PRINT N'-- -- -- hard (=> smart AI)'
+PRINT N'-- -- -- invincible (=> unbeatable AI)'
 PRINT N'-- -- -- free (=> for 2 players, default)'
 PRINT N'-----------------------------'
 
