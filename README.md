@@ -9,3 +9,14 @@ This is the game tic tac toe written entirely in T-SQL. There are multiple modes
 3. 'hard' mode, the user plays against a smarter AI
 
 4. 'invincible' mode, the user plays against an unbeatable AI
+
+
+Here's an easy game I won against the AI:
+
+![test](images/screen-capture-01.png)
+
+![test](images/screen-capture-02.png)
+
+![test](images/screen-capture-03.png)
+
+![test](images/screen-capture-04.png)
