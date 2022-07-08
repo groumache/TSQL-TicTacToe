@@ -538,7 +538,13 @@ AS
         INSERT INTO GAME_BOARD VALUES (@Horizontal, @Vertical, 'O')
     END
 
-    --
+    -- get a position from the invincible ai
+    IF dbo.IS_INVINCIBLE_MODE() = 1 BEGIN
+        EXEC POSITION_INVINCIBLE_AI
+            @OutHorizontal = @Horizontal OUTPUT,
+            @OutVertical = @Vertical OUTPUT
+        INSERT INTO GAME_BOARD VALUES (@Horizontal, @Vertical, 'O')
+    END
 
     -- check if the game is over
     DELETE FROM @GameState
