@@ -13,10 +13,15 @@ This is the game tic tac toe written entirely in T-SQL. There are multiple modes
 
 Here's an easy game I won against the AI:
 
-![test](images/screen-capture-01.png)
+![](images/screen-capture-01.png)
 
-![test](images/screen-capture-02.png)
+![](images/screen-capture-02.png)
 
-![test](images/screen-capture-03.png)
+![](images/screen-capture-03.png)
 
-![test](images/screen-capture-04.png)
+![](images/screen-capture-04.png)
+
+
+Here's an online simulation on my (website)[https://roumache.com/en/sql-tic-tac-toe/]
+
+![](images/screen-capture-05.png)
